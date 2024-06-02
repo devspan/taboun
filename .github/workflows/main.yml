@@ -1,0 +1,89 @@
+name: Wallet
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          depends
+          src/.libs
+          src/.deps
+          src/.objs
+          .config.cache
+        key: ${{ runner.os }}-build-${{ hashFiles('**/*') }}
+        restore-keys: |
+          ${{ runner.os }}-build-
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          libtool \
+          autotools-dev \
+          automake \
+          pkg-config \
+          bsdmainutils \
+          python3 \
+          libssl-dev \
+          libevent-dev \
+          libboost-system-dev \
+          libboost-filesystem-dev \
+          libboost-chrono-dev \
+          libboost-test-dev \
+          libboost-thread-dev \
+          libminiupnpc-dev \
+          libzmq3-dev \
+          libqrencode-dev \
+          libdb-dev \
+          libdb++-dev \
+          gcc-9 \
+          g++-9
+
+    - name: Set GCC 9 as default
+      run: |
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 60
+
+    - name: Set compiler flags
+      run: |
+        export CXXFLAGS="-std=c++11"
+        export LDFLAGS="-std=c++11"
+
+    - name: Compile wallet
+      run: |
+        cd depends
+        make -j $(nproc) HOST=x86_64-linux-gnu
+        cd ..
+        ./autogen.sh
+        ./configure --prefix=$PWD/depends/x86_64-linux-gnu --enable-mining-rpc
+        make -j $(nproc)
+
+    - name: Find and list binaries
+      run: |
+        find src -type f -executable -exec ls -lah {} \;
+
+    - name: Upload binaries as artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dogextreme-wallet-binaries
+        path: |
+          src/pivxd
+          src/pivx-cli
+          src/pivx-tx
+          src/qt/pivx-qt
